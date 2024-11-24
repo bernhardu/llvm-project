@@ -418,7 +418,7 @@ static void *AllocateTrampolineRegion(uptr min_addr, uptr max_addr,
   ReportError(
       "interception_win: AllocateTrampolineRegion failed to find free memory; "
       "min_addr: %p, max_addr: %p, func_addr: %p, granularity: %zu\n",
-      (void *)min_addr, (void *)max_addr, granularity);
+      (void *)min_addr, (void *)max_addr, (void *)func_addr, granularity);
   return nullptr;
 #else
   return ::VirtualAlloc(nullptr,
