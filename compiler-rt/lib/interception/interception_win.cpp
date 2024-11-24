@@ -1244,7 +1244,7 @@ uptr InternalGetProcAddress(void *module, const char *func_name) {
         char function_name[256];
         size_t funtion_name_length = _strlen(func);
         if (funtion_name_length >= sizeof(function_name) - 1) {
-          ReportError("interception_win: func too long: '%s'\n", func);
+          ReportError("interception_win: func too long: '%s'\n", (char*)func);
           InterceptionFailed();
         }
 
