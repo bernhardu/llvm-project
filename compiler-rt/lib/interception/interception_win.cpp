@@ -542,6 +542,271 @@ static const u8 kPrologueWithShortJump2[] = {
 };
 #endif
 
+
+// Returns 0 on error.
+static size_t GetInstructionSize_old(uptr address, size_t* rel_offset = nullptr) {
+#if SANITIZER_ARM64
+  // An ARM64 instruction is 4 bytes long.
+  return 4;
+#endif
+
+#  if SANITIZER_WINDOWS_x64
+  if (memcmp((u8*)address, kPrologueWithShortJump1,
+             sizeof(kPrologueWithShortJump1)) == 0 ||
+      memcmp((u8*)address, kPrologueWithShortJump2,
+             sizeof(kPrologueWithShortJump2)) == 0) {
+    return 0;
+  }
+#endif
+
+  switch (*(u64*)address) {
+    case 0x90909090909006EB:  // stub: jmp over 6 x nop.
+      return 8;
+  }
+
+  switch (*(u8*)address) {
+    case 0x90:  // 90 : nop
+    case 0xC3:  // C3 : ret   (for small/empty function interception
+    case 0xCC:  // CC : int 3  i.e. registering weak functions)
+      return 1;
+
+    case 0x50:  // push eax / rax
+    case 0x51:  // push ecx / rcx
+    case 0x52:  // push edx / rdx
+    case 0x53:  // push ebx / rbx
+    case 0x54:  // push esp / rsp
+    case 0x55:  // push ebp / rbp
+    case 0x56:  // push esi / rsi
+    case 0x57:  // push edi / rdi
+    case 0x5D:  // pop ebp / rbp
+      return 1;
+
+    case 0x6A:  // 6A XX = push XX
+      return 2;
+
+    case 0xb8:  // b8 XX XX XX XX : mov eax, XX XX XX XX
+    case 0xB9:  // b9 XX XX XX XX : mov ecx, XX XX XX XX
+      return 5;
+
+    // Cannot overwrite control-instruction. Return 0 to indicate failure.
+    case 0xE9:  // E9 XX XX XX XX : jmp <label>
+    case 0xE8:  // E8 XX XX XX XX : call <func>
+    case 0xEB:  // EB XX : jmp XX (short jump)
+    case 0x70:  // 7Y YY : jy XX (short conditional jump)
+    case 0x71:
+    case 0x72:
+    case 0x73:
+    case 0x74:
+    case 0x75:
+    case 0x76:
+    case 0x77:
+    case 0x78:
+    case 0x79:
+    case 0x7A:
+    case 0x7B:
+    case 0x7C:
+    case 0x7D:
+    case 0x7E:
+    case 0x7F:
+      return 0;
+  }
+
+  switch (*(u16*)(address)) {
+    case 0x018A:  // 8A 01 : mov al, byte ptr [ecx]
+    case 0xFF8B:  // 8B FF : mov edi, edi
+    case 0xEC8B:  // 8B EC : mov ebp, esp
+    case 0xc889:  // 89 C8 : mov eax, ecx
+    case 0xE589:  // 89 E5 : mov ebp, esp
+    case 0xC18B:  // 8B C1 : mov eax, ecx
+    case 0xC033:  // 33 C0 : xor eax, eax
+    case 0xC933:  // 33 C9 : xor ecx, ecx
+    case 0xD233:  // 33 D2 : xor edx, edx
+      return 2;
+
+    // Cannot overwrite control-instruction. Return 0 to indicate failure.
+    case 0x25FF:  // FF 25 XX XX XX XX : jmp [XXXXXXXX]
+      return 0;
+  }
+
+  switch (0x00FFFFFF & *(u32*)address) {
+    case 0x24A48D:  // 8D A4 24 XX XX XX XX : lea esp, [esp + XX XX XX XX]
+      return 7;
+  }
+
+  switch (0x000000FF & *(u32 *)address) {
+    case 0xc2:  // C2 XX XX : ret XX (needed for registering weak functions)
+      return 3;
+  }
+
+#  if SANITIZER_WINDOWS_x64
+  switch (*(u8*)address) {
+    case 0xA1:  // A1 XX XX XX XX XX XX XX XX :
+                //   movabs eax, dword ptr ds:[XXXXXXXX]
+      return 9;
+
+    case 0x83:
+      const u8 next_byte = *(u8*)(address + 1);
+      const u8 mod = next_byte >> 6;
+      const u8 rm = next_byte & 7;
+      if (mod == 1 && rm == 4)
+        return 5;  // 83 ModR/M SIB Disp8 Imm8
+                   //   add|or|adc|sbb|and|sub|xor|cmp [r+disp8], imm8
+  }
+
+  switch (*(u16*)address) {
+    case 0x5040:  // push rax
+    case 0x5140:  // push rcx
+    case 0x5240:  // push rdx
+    case 0x5340:  // push rbx
+    case 0x5440:  // push rsp
+    case 0x5540:  // push rbp
+    case 0x5640:  // push rsi
+    case 0x5740:  // push rdi
+    case 0x5441:  // push r12
+    case 0x5541:  // push r13
+    case 0x5641:  // push r14
+    case 0x5741:  // push r15
+    case 0x9066:  // Two-byte NOP
+    case 0xc084:  // test al, al
+    case 0x018a:  // mov al, byte ptr [rcx]
+      return 2;
+
+    case 0x058A:  // 8A 05 XX XX XX XX : mov al, byte ptr [XX XX XX XX]
+    case 0x058B:  // 8B 05 XX XX XX XX : mov eax, dword ptr [XX XX XX XX]
+      if (rel_offset)
+        *rel_offset = 2;
+      return 6;
+  }
+
+  switch (0x00FFFFFF & *(u32*)address) {
+    case 0xe58948:    // 48 8b c4 : mov rbp, rsp
+    case 0xc18b48:    // 48 8b c1 : mov rax, rcx
+    case 0xc48b48:    // 48 8b c4 : mov rax, rsp
+    case 0xd9f748:    // 48 f7 d9 : neg rcx
+    case 0xd12b48:    // 48 2b d1 : sub rdx, rcx
+    case 0x07c1f6:    // f6 c1 07 : test cl, 0x7
+    case 0xc98548:    // 48 85 C9 : test rcx, rcx
+    case 0xd28548:    // 48 85 d2 : test rdx, rdx
+    case 0xc0854d:    // 4d 85 c0 : test r8, r8
+    case 0xc2b60f:    // 0f b6 c2 : movzx eax, dl
+    case 0xc03345:    // 45 33 c0 : xor r8d, r8d
+    case 0xc93345:    // 45 33 c9 : xor r9d, r9d
+    case 0xdb3345:    // 45 33 DB : xor r11d, r11d
+    case 0xd98b4c:    // 4c 8b d9 : mov r11, rcx
+    case 0xd28b4c:    // 4c 8b d2 : mov r10, rdx
+    case 0xc98b4c:    // 4C 8B C9 : mov r9, rcx
+    case 0xc18b4c:    // 4C 8B C1 : mov r8, rcx
+    case 0xd2b60f:    // 0f b6 d2 : movzx edx, dl
+    case 0xca2b48:    // 48 2b ca : sub rcx, rdx
+    case 0xca3b48:    // 48 3b ca : cmp rcx, rdx
+    case 0x10b70f:    // 0f b7 10 : movzx edx, WORD PTR [rax]
+    case 0xc00b4d:    // 3d 0b c0 : or r8, r8
+    case 0xc08b41:    // 41 8b c0 : mov eax, r8d
+    case 0xd18b48:    // 48 8b d1 : mov rdx, rcx
+    case 0xdc8b4c:    // 4c 8b dc : mov r11, rsp
+    case 0xd18b4c:    // 4c 8b d1 : mov r10, rcx
+    case 0xE0E483:    // 83 E4 E0 : and esp, 0xFFFFFFE0
+      return 3;
+
+    case 0xec8348:    // 48 83 ec XX : sub rsp, XX
+    case 0xf88349:    // 49 83 f8 XX : cmp r8, XX
+    case 0x588948:    // 48 89 58 XX : mov QWORD PTR[rax + XX], rbx
+      return 4;
+
+    case 0xec8148:    // 48 81 EC XX XX XX XX : sub rsp, XXXXXXXX
+      return 7;
+
+    case 0x058b48:    // 48 8b 05 XX XX XX XX :
+                      //   mov rax, QWORD PTR [rip + XXXXXXXX]
+    case 0x058d48:    // 48 8d 05 XX XX XX XX :
+                      //   lea rax, QWORD PTR [rip + XXXXXXXX]
+    case 0x25ff48:    // 48 ff 25 XX XX XX XX :
+                      //   rex.W jmp QWORD PTR [rip + XXXXXXXX]
+    case 0x158D4C:    // 4c 8d 15 XX XX XX XX : lea r10, [rip + XX]
+      // Instructions having offset relative to 'rip' need offset adjustment.
+      if (rel_offset)
+        *rel_offset = 3;
+      return 7;
+
+    case 0x2444c7:    // C7 44 24 XX YY YY YY YY
+                      //   mov dword ptr [rsp + XX], YYYYYYYY
+      return 8;
+  }
+
+  switch (*(u32*)(address)) {
+    case 0x24448b48:  // 48 8b 44 24 XX : mov rax, QWORD ptr [rsp + XX]
+    case 0x246c8948:  // 48 89 6C 24 XX : mov QWORD ptr [rsp + XX], rbp
+    case 0x245c8948:  // 48 89 5c 24 XX : mov QWORD PTR [rsp + XX], rbx
+    case 0x24748948:  // 48 89 74 24 XX : mov QWORD PTR [rsp + XX], rsi
+    case 0x247c8948:  // 48 89 7c 24 XX : mov QWORD PTR [rsp + XX], rdi
+    case 0x244C8948:  // 48 89 4C 24 XX : mov QWORD PTR [rsp + XX], rcx
+    case 0x24548948:  // 48 89 54 24 XX : mov QWORD PTR [rsp + XX], rdx
+    case 0x244c894c:  // 4c 89 4c 24 XX : mov QWORD PTR [rsp + XX], r9
+    case 0x2444894c:  // 4c 89 44 24 XX : mov QWORD PTR [rsp + XX], r8
+      return 5;
+    case 0x24648348:  // 48 83 64 24 XX : and QWORD PTR [rsp + XX], YY
+      return 6;
+  }
+
+#else
+
+  switch (*(u8*)address) {
+    case 0xA1:  // A1 XX XX XX XX :  mov eax, dword ptr ds:[XXXXXXXX]
+      return 5;
+  }
+  switch (*(u16*)address) {
+    case 0x458B:  // 8B 45 XX : mov eax, dword ptr [ebp + XX]
+    case 0x5D8B:  // 8B 5D XX : mov ebx, dword ptr [ebp + XX]
+    case 0x7D8B:  // 8B 7D XX : mov edi, dword ptr [ebp + XX]
+    case 0xEC83:  // 83 EC XX : sub esp, XX
+    case 0x75FF:  // FF 75 XX : push dword ptr [ebp + XX]
+      return 3;
+    case 0xC1F7:  // F7 C1 XX YY ZZ WW : test ecx, WWZZYYXX
+    case 0x25FF:  // FF 25 XX YY ZZ WW : jmp dword ptr ds:[WWZZYYXX]
+      return 6;
+    case 0x3D83:  // 83 3D XX YY ZZ WW TT : cmp TT, WWZZYYXX
+      return 7;
+    case 0x7D83:  // 83 7D XX YY : cmp dword ptr [ebp + XX], YY
+      return 4;
+  }
+
+  switch (0x00FFFFFF & *(u32*)address) {
+    case 0x24448A:  // 8A 44 24 XX : mov eal, dword ptr [esp + XX]
+    case 0x24448B:  // 8B 44 24 XX : mov eax, dword ptr [esp + XX]
+    case 0x244C8B:  // 8B 4C 24 XX : mov ecx, dword ptr [esp + XX]
+    case 0x24548B:  // 8B 54 24 XX : mov edx, dword ptr [esp + XX]
+    case 0x245C8B:  // 8B 5C 24 XX : mov ebx, dword ptr [esp + XX]
+    case 0x246C8B:  // 8B 6C 24 XX : mov ebp, dword ptr [esp + XX]
+    case 0x24748B:  // 8B 74 24 XX : mov esi, dword ptr [esp + XX]
+    case 0x247C8B:  // 8B 7C 24 XX : mov edi, dword ptr [esp + XX]
+      return 4;
+  }
+
+  switch (*(u32*)address) {
+    case 0x2444B60F:  // 0F B6 44 24 XX : movzx eax, byte ptr [esp + XX]
+      return 5;
+  }
+#endif
+
+  // Unknown instruction! This might happen when we add a new interceptor, use
+  // a new compiler version, or if Windows changed how some functions are
+  // compiled. In either case, we print the address and 8 bytes of instructions
+  // to notify the user about the error and to help identify the unknown
+  // instruction. Don't treat this as a fatal error, though we can break the
+  // debugger if one has been attached.
+  //u8 *bytes = (u8 *)address;
+  //ReportError(
+  //    "interception_win: unhandled instruction at %p: %02x %02x %02x %02x %02x "
+  //    "%02x %02x %02x\n",
+  //    (void *)address, bytes[0], bytes[1], bytes[2], bytes[3], bytes[4],
+  //    bytes[5], bytes[6], bytes[7]);
+  if (::IsDebuggerPresent())
+    __debugbreak();
+  return 0;
+}
+
+
+
 // Returns 0 on error.
 static size_t GetInstructionSize(uptr address, size_t* rel_offset = nullptr) {
   if (rel_offset) {
