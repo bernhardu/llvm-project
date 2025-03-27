@@ -1,0 +1,227 @@
+name: Run compiler-rt tests
+on:
+  push:
+
+jobs:
+  llvm-project-clang:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86_64
+          - i686
+    steps:
+      - name: Cache sccache
+        id: cache-sccache
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/Mozilla/sccache
+          key: ${{ runner.os }}-${{ matrix.arch }}-sccache-${{ github.run_number }}-${{ github.run_attempt }}
+          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-sccache
+
+      - name: Cache choco
+        id: cache-choco
+        uses: actions/cache@v4
+        with:
+          path: c:/choco-cache
+          key: ${{ runner.os }}-${{ matrix.arch }}-choco
+          restore-keys: ${{ runner.os }}-${{ matrix.arch }}-choco
+
+#      - name: Install ninja
+#        shell: cmd
+#        run: |
+#          mkdir c:\choco-cache
+#          choco install ninja --cache-location=c:\choco-cache
+
+      - name: Install sccache
+        shell: cmd
+        run: |
+          mkdir c:\choco-cache
+          choco install sccache --cache-location=c:\choco-cache
+
+      - name: Install pre-built LLVM or link pre-installed
+        shell: cmd
+        run: |
+          REM LIT does not like spaces: 'C:/Program': command not found
+          mkdir c:\choco-cache
+          if "${{matrix.arch}}" == "i686"       choco install llvm --version=21.1.0 --force --install-arguments="/D=C:\LLVM-${{matrix.arch}}" --cache-location=c:\choco-cache --forcex86
+          REM if "${{matrix.arch}}" == "x86_64" choco install llvm --version=21.1.0 --force --install-arguments="/D=C:\LLVM-${{matrix.arch}}" --cache-location=c:\choco-cache
+          if "${{matrix.arch}}" == "x86_64"     mklink /D c:\LLVM-x86_64 "C:\Program Files\LLVM"
+
+      - name: Configure Git core.autocrlf
+        run: |
+          git config --global core.autocrlf false
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show version information
+        continue-on-error: true
+        shell: cmd
+        run: |
+          cmake --version
+          python --version
+          ninja --version
+          clang --version
+          git --version
+          sccache --version
+          echo set
+          set
+
+      - name: Build test executables and test compiler-rt
+        continue-on-error: true
+        shell: cmd
+        run: |
+          if "${{matrix.arch}}" == "i686"   set MY_MSVC_ARCH=x86
+          if "${{matrix.arch}}" == "x86_64" set MY_MSVC_ARCH=amd64
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=%MY_MSVC_ARCH% -host_arch=amd64
+          echo -- Hide msvc versions of libs
+          mkdir "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\%MY_MSVC_ARCH%\disabled"
+          move  "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\%MY_MSVC_ARCH%\clang*.lib" "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\%MY_MSVC_ARCH%\disabled\"
+          echo -- Hide pre-built clang versions of libs
+          mkdir C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\disabled
+          move  C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\clang*.lib C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\disabled\
+          move  C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\disabled\clang_rt.builtins*.lib C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\
+          echo -- Set environment
+          set PATH=C:\LLVM-${{matrix.arch}}\bin;%PATH%
+          echo -- PATH=%PATH%
+          set CFLAGS=-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS
+          set CXXFLAGS=-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS
+          mkdir build-tools-${{matrix.arch}}
+          cd    build-tools-${{matrix.arch}}
+          echo -- call cmake build-tools
+          cmake ../llvm ^
+            -G Ninja ^
+            -D CMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
+            -Wno-deprecated ^
+            -D LLVM_ENABLE_PEDANTIC=NO
+          ninja not FileCheck llvm-config KillTheDoctor count split-file
+          cd ..
+          set PATH=D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin;%PATH%
+          echo -- PATH=%PATH%
+          mkdir build-compiler-rt-${{matrix.arch}}
+          cd    build-compiler-rt-${{matrix.arch}}
+          echo -- call cmake compiler-rt
+          cmake ../compiler-rt ^
+            -G Ninja ^
+            -D CMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
+            -D CMAKE_C_COMPILER_TARGET=${{matrix.arch}}-pc-windows-msvc ^
+            -D COMPILER_RT_DEFAULT_TARGET_ONLY=TRUE ^
+            -D COMPILER_RT_USE_BUILTINS_LIBRARY=TRUE ^
+            -D LLVM_ENABLE_ASSERTIONS=ON ^
+            -D LLVM_ENABLE_RTTI=ON ^
+            -D LLVM_ENABLE_EH=ON ^
+            -D LLVM_CONFIG_PATH="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin\llvm-config" ^
+            -D LLVM_CMAKE_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\lib\cmake\llvm" ^
+            -D COMPILER_RT_INCLUDE_TESTS=ON ^
+            -D COMPILER_RT_BUILD_LIBFUZZER=OFF ^
+            -D COMPILER_RT_BUILD_ORC=OFF ^
+            -D COMPILER_RT_BUILD_PROFILE=OFF ^
+            -D LLVM_TOOLS_BINARY_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin" ^
+            -Wno-deprecated ^
+            -D LLVM_LIT_ARGS="-v --time-tests"
+          echo -- call ninja
+          REM set LIT_FILTER=aligned_mallocs
+          set LIT_FILTER=_alloc_zero
+          ninja all builtins check-compiler-rt
+          REM echo -- Unhide msvc versions of libs
+          REM move "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\%MY_MSVC_ARCH%\disabled\*.lib" "c:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Tools\MSVC\14.44.35207\lib\%MY_MSVC_ARCH%\"
+          REM echo -- Unhide pre-built clang versions of libs
+          REM move  C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\disabled\*.lib C:\LLVM-${{matrix.arch}}\lib\clang\20\lib\windows\
+          REM
+          REM special test:
+          set ASAN_OPTIONS=windows_hook_rtl_allocators=true
+          set PATH=lib\windows;%PATH%
+          if "${{matrix.arch}}" == "i686"   test\asan\I386WindowsDynamicConfig\TestCases\Windows\Output\heaprealloc_alloc_zero.cpp.tmp
+          if "${{matrix.arch}}" == "x86_64" test\asan\X86_64WindowsDynamicConfig\TestCases\Windows\Output\heaprealloc_alloc_zero.cpp.tmp
+
+
+
+# Looks like the intended way to run is via clang.exe/clang++.exe ?
+#
+#  llvm-project-clang-cl:
+#    runs-on: windows-latest
+#    strategy:
+#      fail-fast: false
+#      matrix:
+#        arch:
+#          - x86_64
+#          - i686
+#    steps:
+#      - name: Look for VsDevCmd.bat
+#        shell: cmd
+#        run: |
+#          dir "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+##      - name: Install ninja
+##        shell: cmd
+##        run: |
+##          choco install ninja
+#      - name: Install pre-built LLVM or link pre-installed
+#        shell: cmd
+#        run: |
+#          REM LIT does not like spaces: 'C:/Program': command not found
+#          if "${{matrix.arch}}" == "i686"       choco install llvm --version=21.1.0 --force --install-arguments="/D=C:\LLVM-${{matrix.arch}}" --forcex86
+#          REM if "${{matrix.arch}}" == "x86_64" choco install llvm --version=21.1.0 --force --install-arguments="/D=C:\LLVM-${{matrix.arch}}"
+#          if "${{matrix.arch}}" == "x86_64"     mklink /D c:\LLVM-x86_64 "C:\Program Files\LLVM"
+#      - name: Configure Git core.autocrlf
+#        run: |
+#          git config --global core.autocrlf false
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#      - name: Build test executables and test compiler-rt
+#        shell: cmd
+#        run: |
+#          if "${{matrix.arch}}" == "i686"   call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=x86   -host_arch=amd64
+#          if "${{matrix.arch}}" == "x86_64" call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64
+#          set PATH=C:\LLVM-${{matrix.arch}}\bin;%PATH%
+#          echo -- PATH=%PATH%
+#          cmake --version
+#          python --version
+#          ninja --version
+#          clang --version
+#          set CFLAGS=-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS
+#          set CXXFLAGS=-D_CRT_NONSTDC_NO_DEPRECATE -D_CRT_SECURE_NO_DEPRECATE -D_CRT_SECURE_NO_WARNINGS
+#          mkdir build-tools-${{matrix.arch}}
+#          cd    build-tools-${{matrix.arch}}
+#          echo -- call cmake build-tools
+#          cmake ../llvm ^
+#            -G Ninja ^
+#            -D CMAKE_BUILD_TYPE=Release ^
+#            -Wno-deprecated ^
+#            -D LLVM_ENABLE_PEDANTIC=NO
+#          ninja not FileCheck llvm-config KillTheDoctor count split-file
+#          cd ..
+#          set PATH=D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin;%PATH%
+#          echo -- PATH=%PATH%
+#          mkdir build-compiler-rt-${{matrix.arch}}
+#          cd    build-compiler-rt-${{matrix.arch}}
+#          echo -- call cmake compiler-rt
+#          cmake ../compiler-rt ^
+#            -G Ninja ^
+#            -D CMAKE_BUILD_TYPE=Release ^
+#            -D CMAKE_C_COMPILER=clang-cl ^
+#            -D CMAKE_CXX_COMPILER=clang-cl ^
+#            -D CMAKE_C_COMPILER_TARGET=${{matrix.arch}}-pc-windows-msvc ^
+#            -D COMPILER_RT_DEFAULT_TARGET_ONLY=TRUE ^
+#            -D COMPILER_RT_USE_BUILTINS_LIBRARY=TRUE ^
+#            -D LLVM_ENABLE_ASSERTIONS=ON ^
+#            -D LLVM_ENABLE_RTTI=ON ^
+#            -D LLVM_ENABLE_EH=ON ^
+#            -D LLVM_CONFIG_PATH="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin\llvm-config" ^
+#            -D LLVM_CMAKE_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\lib\cmake\llvm" ^
+#            -D COMPILER_RT_INCLUDE_TESTS=ON ^
+#            -D COMPILER_RT_BUILD_LIBFUZZER=OFF ^
+#            -D COMPILER_RT_BUILD_ORC=OFF ^
+#            -D COMPILER_RT_BUILD_PROFILE=OFF ^
+#            -D COMPILER_RT_HAS_EXTERNAL_FLAG=FALSE ^
+#            -D LLVM_TOOLS_BINARY_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin" ^
+#            -Wno-deprecated ^
+#            -D LLVM_LIT_ARGS="-v --time-tests"
+#          echo -- call ninja
+#          REM set LIT_FILTER=aligned_mallocs
+#          ninja all builtins check-compiler-rt
