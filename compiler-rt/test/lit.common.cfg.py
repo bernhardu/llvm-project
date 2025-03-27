@@ -214,7 +214,7 @@ if test_cc_resource_dir != local_build_resource_dir and config.test_standalone_b
         # directory so that the just-built shared libraries are used.
         config.target_cflags += f" -nobuiltininc"
         config.target_cflags += f" -I{config.compiler_rt_src_root}/include"
-        config.target_cflags += f" -idirafter {test_cc_resource_dir}/include"
+        #config.target_cflags += f" -idirafter {test_cc_resource_dir}/include"
         config.target_cflags += f" -resource-dir={config.compiler_rt_output_dir}"
         if not target_is_windows:
             # Avoid passing -rpath on Windows where it is not supported.

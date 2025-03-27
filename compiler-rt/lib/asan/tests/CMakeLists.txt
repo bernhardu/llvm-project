@@ -201,10 +201,9 @@ function(add_asan_tests arch test_runtime)
       generate_asan_tests(ASAN_DYNAMIC_TEST_OBJECTS
         AsanDynamicUnitTests "${dynamic_test_name}"
         SUBDIR "${CONFIG_NAME_DYNAMIC}"
-        CFLAGS ${ASAN_UNITTEST_INSTRUMENTED_CFLAGS} -D_MT -D_DLL
+        CFLAGS ${ASAN_UNITTEST_INSTRUMENTED_CFLAGS}
         SOURCES ${ASAN_INST_TEST_SOURCES}
         LINK_FLAGS ${ASAN_DYNAMIC_UNITTEST_INSTRUMENTED_LINK_FLAGS}
-          -D_MT -D_DLL -Wl,-nodefaultlib:libcmt,-defaultlib:msvcrt,-defaultlib:oldnames
         )
     else()
       set(DYNAMIC_LINK_FLAGS)

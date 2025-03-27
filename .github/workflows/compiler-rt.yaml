@@ -1,0 +1,85 @@
+name: Run compiler-rt tests
+on:
+  push:
+
+jobs:
+  llvm-mingw:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x86_64
+          - i686
+    steps:
+      - name: Test VsDevCmd.bat
+        shell: cmd
+        run: |
+          dir "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat"
+      - name: Install ninja
+        shell: cmd
+        run: |
+          choco install ninja
+      - name: Install pre-built LLVM
+        shell: cmd
+        run: |
+          if "${{matrix.arch}}" == "i686" (set FORCEX86=--forcex86) else (set FORCEX86=)
+          choco install llvm --version=20.1.0 --install-arguments="/D=C:\LLVM-${{matrix.arch}}" %FORCEX86%
+      - name: Configure Git core.autocrlf
+        run: |
+          git config --global core.autocrlf false
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build test executables and test compiler-rt
+        shell: cmd
+        run: |
+          echo -- call VsDevCmd.bat
+          if "${{matrix.arch}}" == "i686" (set MYARCH=x86) else (set MYARCH=amd64)
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\VsDevCmd.bat" -arch=%MYARCH% -host_arch=amd64
+          set PATH=C:\LLVM-${{matrix.arch}}\bin;%PATH%
+          echo -- PATH=%PATH%
+          set CFLAGS=/D_CRT_NONSTDC_NO_DEPRECATE /D_CRT_SECURE_NO_DEPRECATE /D_CRT_SECURE_NO_WARNINGS
+          set CXXFLAGS=/D_CRT_NONSTDC_NO_DEPRECATE /D_CRT_SECURE_NO_DEPRECATE /D_CRT_SECURE_NO_WARNINGS
+          mkdir build-tools-${{matrix.arch}}
+          cd    build-tools-${{matrix.arch}}
+          echo -- call cmake build-tools
+          cmake ../llvm ^
+            -G Ninja ^
+            -D CMAKE_BUILD_TYPE=Release ^
+            -D LLVM_TARGETS_TO_BUILD=X86 ^
+            -D CMAKE_C_COMPILER=clang-cl ^
+            -D CMAKE_CXX_COMPILER=clang-cl ^
+            -Wno-deprecated ^
+            -D LLVM_ENABLE_PEDANTIC=NO
+          ninja not FileCheck llvm-config KillTheDoctor count split-file
+          cd ..
+          set PATH=D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin;%PATH%
+          echo -- PATH=%PATH%
+          mkdir build-compiler-rt-${{matrix.arch}}
+          cd    build-compiler-rt-${{matrix.arch}}
+          echo -- call cmake compiler-rt
+          cmake ../compiler-rt ^
+            -G Ninja ^
+            -D CMAKE_BUILD_TYPE=Release ^
+            -D CMAKE_AR=C:/LLVM-${{matrix.arch}}/bin/llvm-lib.exe ^
+            -D CMAKE_RANLIB=C:/LLVM-${{matrix.arch}}/bin/llvm-ranlib.exe ^
+            -D CMAKE_C_COMPILER=C:/LLVM-${{matrix.arch}}/bin/clang-cl.exe ^
+            -D CMAKE_CXX_COMPILER=C:/LLVM-${{matrix.arch}}/bin/clang-cl.exe ^
+            -D CMAKE_LINKER=C:/LLVM-${{matrix.arch}}/bin/lld-link.exe ^
+            -D COMPILER_RT_USE_BUILTINS_LIBRARY=TRUE ^
+            -D LLVM_ENABLE_ASSERTIONS=ON ^
+            -D LLVM_ENABLE_RTTI=ON ^
+            -D LLVM_ENABLE_EH=ON ^
+            -D LLVM_CONFIG_PATH="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin\llvm-config.exe" ^
+            -D LLVM_CMAKE_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\lib\cmake\llvm" ^
+            -D COMPILER_RT_INCLUDE_TESTS=ON ^
+            -D COMPILER_RT_BUILD_LIBFUZZER=OFF ^
+            -D COMPILER_RT_BUILD_ORC=OFF ^
+            -D LLVM_TOOLS_BINARY_DIR="D:\a\llvm-project\llvm-project\build-tools-${{matrix.arch}}\bin" ^
+            -D CLANG_CL=1 ^
+            -Wno-deprecated ^
+            -D LLVM_LIT_ARGS="-v --time-tests"
+          echo -- call ninja
+          ninja -v
+          echo -- call ninja check-compiler-rt
+          ninja -v check-compiler-rt
