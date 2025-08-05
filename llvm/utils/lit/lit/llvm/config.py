@@ -52,10 +52,10 @@ class LLVMConfig(object):
             )
             self.use_lit_shell = True
 
-            global lit_path_displayed
-            if not self.lit_config.quiet and lit_path_displayed is False:
-                self.lit_config.note("using lit tools: {}".format(path))
-                lit_path_displayed = True
+            #global lit_path_displayed
+            #if not self.lit_config.quiet and lit_path_displayed is False:
+            #    self.lit_config.note("using lit tools: {}".format(path))
+            #    lit_path_displayed = True
 
         if platform.system() == "OS/390":
             self.with_environment("_BPXK_AUTOCVT", "ON")
