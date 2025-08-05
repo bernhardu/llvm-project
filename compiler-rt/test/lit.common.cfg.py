@@ -309,7 +309,7 @@ config.environment["PATH"] = path
 
 # Help MSVS link.exe find the standard libraries.
 # Make sure we only try to use it when targetting Windows.
-if platform.system() == "Windows" and target_is_msvc:
+if platform.system() == "Windows" and target_is_msvc and "LIB" in os.environ:
     config.environment["LIB"] = os.environ["LIB"]
 
 config.available_features.add(config.target_os.lower())
