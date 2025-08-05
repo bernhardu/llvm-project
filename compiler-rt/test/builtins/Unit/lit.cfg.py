@@ -75,7 +75,7 @@ config.test_source_root = os.path.dirname(__file__)
 
 # Path to the static library
 is_msvc = get_required_attr(config, "is_msvc")
-if is_msvc:
+if is_msvc or 1 == 1:   # don't know how to detect we need to use from external LLVM installation like C:\LLVM-i686\lib\clang\20\lib\windows\clang_rt.builtins-i386.lib
     base_lib = os.path.join(
         config.compiler_rt_libdir, "clang_rt.builtins%s.lib " % config.target_suffix
     )
