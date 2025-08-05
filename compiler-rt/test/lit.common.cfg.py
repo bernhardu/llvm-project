@@ -57,10 +57,10 @@ def find_compiler_libdir():
             return os.path.realpath(runtime_dir)
         # TODO(dliew): This should be a fatal error but it seems to trip the `llvm-clang-win-x-aarch64`
         # bot which is likely misconfigured
-        lit_config.warning(
-            f'Path reported by clang does not exist: "{runtime_dir}". '
-            f"This path was found by running {clang_cmd}."
-        )
+        #lit_config.warning(
+        #    f'Path reported by clang does not exist: "{runtime_dir}". '
+        #    f"This path was found by running {clang_cmd}."
+        #)
         return None
 
     # Fall back for older AppleClang that doesn't support `-print-runtime-dir`
