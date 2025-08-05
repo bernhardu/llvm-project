@@ -764,7 +764,7 @@ endif()
 # Warnings to turn off for all libraries, not just sanitizers.
 append_string_if(COMPILER_RT_HAS_WUNUSED_PARAMETER_FLAG -Wno-unused-parameter CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
 
-if (CMAKE_LINKER MATCHES "link.exe$")
+if (CMAKE_LINKER MATCHES "link.exe$" AND NOT CMAKE_LINKER MATCHES "lld-link")
   # Silence MSVC linker warnings caused by empty object files. The
   # sanitizer libraries intentionally use ifdefs that result in empty
   # files, rather than skipping these files in the build system.
