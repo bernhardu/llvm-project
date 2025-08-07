@@ -6,7 +6,7 @@ int main() {
   {
     int x;
     delete &x;
-    // CHECK: {{.*}}) 'x' (line [[@LINE-2]])
+    // CHECK: {{.*}}) 'x1' (line [[@LINE-2]])
   }
 }
 
