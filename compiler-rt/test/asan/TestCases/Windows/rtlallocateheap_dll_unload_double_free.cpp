@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <windows.h>
 
-extern "C" {
 #if defined(EXE)
 using AllocateFunctionPtr = PVOID(__stdcall *)(PVOID, ULONG, SIZE_T);
 using FreeFunctionPtr = PVOID(__stdcall *)(PVOID, ULONG, PVOID);
@@ -37,7 +36,7 @@ int main(int argc, char **argv) {
   buffer = (char *)RtlAllocateHeap_ptr(GetProcessHeap(), 0, 32);
 
   HMODULE lib = LoadLibraryA(argv[1]);
-  assert(lib != INVALID_HANDLE_VALUE);
+  assert(lib != INVALID_HANDLE_VALUE && lib != NULL);
   assert(0 != FreeLibrary(lib));
 
   if (!RtlFreeHeap_ptr(GetProcessHeap(), 0, buffer)) {
@@ -67,4 +66,3 @@ BOOL WINAPI DllMain(HMODULE, DWORD reason, LPVOID) {
 #else
 #error oops!
 #endif
-}
