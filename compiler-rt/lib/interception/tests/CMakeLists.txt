@@ -19,13 +19,15 @@ set(INTERCEPTION_TEST_CFLAGS_COMMON
   -I${COMPILER_RT_SOURCE_DIR}/lib
   -I${COMPILER_RT_SOURCE_DIR}/lib/interception
   -DSANITIZER_COMMON_NO_REDEFINE_BUILTINS
-  -fno-rtti
   -fno-builtin-isdigit
   -fno-builtin-isalpha
   -fno-builtin-isalnum
   -fno-builtin-islower
   -O2
   -Werror=sign-compare)
+
+append_list_if(NOT CLANG_CL -fno-rtti INTERCEPTION_TEST_CFLAGS_COMMON)
+# avoids: clang-cl: warning: unknown argument ignored in clang-cl: '-fno-rtti' [-Wunknown-argument]
 
 set(INTERCEPTION_TEST_LINK_FLAGS_COMMON
   ${COMPILER_RT_UNITTEST_LINK_FLAGS}
