@@ -196,6 +196,12 @@ function(add_asan_tests arch test_runtime)
     set(dynamic_test_name "Asan-${arch}${TEST_KIND}-Dynamic-Test")
     if(MSVC)
 
+      if(CLANG_CL)
+        set(msvcrt_ldflags -D_MT -D_DLL -Xlinker -nodefaultlib:libcmt -Xlinker -defaultlib:msvcrt -Xlinker -defaultlib:oldnames)
+      else()
+        set(msvcrt_ldflags -D_MT -D_DLL -Wl,-nodefaultlib:libcmt,-defaultlib:msvcrt,-defaultlib:oldnames)
+      endif()
+
       # With the MSVC CRT, the choice between static and dynamic CRT is made at
       # compile time with a macro. Simulate the effect of passing /MD to clang-cl.
       set(ASAN_DYNAMIC_TEST_OBJECTS)
@@ -204,8 +210,7 @@ function(add_asan_tests arch test_runtime)
         SUBDIR "${CONFIG_NAME_DYNAMIC}"
         CFLAGS ${ASAN_UNITTEST_INSTRUMENTED_CFLAGS} -D_MT -D_DLL
         SOURCES ${ASAN_INST_TEST_SOURCES}
-        LINK_FLAGS ${ASAN_DYNAMIC_UNITTEST_INSTRUMENTED_LINK_FLAGS}
-          -D_MT -D_DLL -Wl,-nodefaultlib:libcmt,-defaultlib:msvcrt,-defaultlib:oldnames
+        LINK_FLAGS ${ASAN_DYNAMIC_UNITTEST_INSTRUMENTED_LINK_FLAGS} ${msvcrt_ldflags}
         )
     else()
       set(DYNAMIC_LINK_FLAGS)
