@@ -1,5 +1,7 @@
 # Build for the undefined behavior sanitizer runtime support library.
 
+include(CheckCompilerVersion)
+
 set(UBSAN_SOURCES
   ubsan_diag.cpp
   ubsan_init.cpp
