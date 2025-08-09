@@ -170,6 +170,11 @@ macro(add_sanitizer_tests_for_arch arch)
     list(APPEND extra_flags "-D_LARGEFILE_SOURCE=1")
     list(APPEND extra_flags "-D_FILE_OFFSET_BITS=64")
   endif()
+
+  if(MSVC OR CLANG_CL)
+    list(APPEND extra_flags "/EHsc")
+  endif()
+
   get_sanitizer_common_lib_for_arch(${arch} SANITIZER_COMMON_LIB)
   set(TARGET_LINK_FLAGS)
   get_target_link_flags_for_arch(${arch} TARGET_LINK_FLAGS)
