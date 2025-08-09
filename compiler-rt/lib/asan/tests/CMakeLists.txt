@@ -29,11 +29,13 @@ set(ASAN_UNITTEST_COMMON_CFLAGS
   -I${COMPILER_RT_SOURCE_DIR}/lib/asan
   -I${COMPILER_RT_SOURCE_DIR}/lib/sanitizer_common/tests
   -DSANITIZER_COMMON_NO_REDEFINE_BUILTINS
-  -fno-rtti
   -O2
   -Wno-format
   -Werror=sign-compare)
 append_list_if(COMPILER_RT_HAS_WVARIADIC_MACROS_FLAG -Wno-variadic-macros ASAN_UNITTEST_COMMON_CFLAGS)
+
+append_list_if(NOT CLANG_CL -fno-rtti INTERCEPTION_TEST_CFLAGS_COMMON)
+# avoids: clang-cl: warning: unknown argument ignored in clang-cl: '-fno-rtti' [-Wunknown-argument]
 
 # This will ensure the target linker is used
 # during cross compilation
