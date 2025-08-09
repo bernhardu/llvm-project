@@ -1,5 +1,7 @@
 # Build for the AddressSanitizer runtime support library.
 
+include(CheckCompilerVersion)
+
 set(ASAN_SOURCES
   asan_allocator.cpp
   asan_activation.cpp
