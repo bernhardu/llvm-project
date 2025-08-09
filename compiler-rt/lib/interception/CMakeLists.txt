@@ -1,5 +1,7 @@
 # Build for the runtime interception helper library.
 
+include(CheckCompilerVersion)
+
 set(INTERCEPTION_SOURCES
   interception_aix.cpp
   interception_linux.cpp
