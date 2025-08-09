@@ -74,11 +74,13 @@ set(SANITIZER_TEST_CFLAGS_COMMON
   -I${COMPILER_RT_SOURCE_DIR}/lib
   -I${COMPILER_RT_SOURCE_DIR}/lib/sanitizer_common
   -DSANITIZER_COMMON_NO_REDEFINE_BUILTINS
-  -fno-rtti
   -O2
   -Werror=sign-compare
   -Wno-gnu-zero-variadic-macro-arguments
   )
+
+append_list_if(NOT MSVC -fno-rtti SANITIZER_TEST_CFLAGS_COMMON)
+# avoids: clang-cl: warning: unknown argument ignored in clang-cl: '-fno-rtti' [-Wunknown-argument]
 
 set(SANITIZER_TEST_LINK_FLAGS_COMMON
   ${COMPILER_RT_UNITTEST_LINK_FLAGS}
