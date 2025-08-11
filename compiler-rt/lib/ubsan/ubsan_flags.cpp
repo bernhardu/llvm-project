@@ -23,11 +23,11 @@ namespace __ubsan {
 
 static const char *GetFlag(const char *flag) {
   // We cannot call getenv() from inside a preinit array initializer
-  if (SANITIZER_CAN_USE_PREINIT_ARRAY) {
+  //if (SANITIZER_CAN_USE_PREINIT_ARRAY) {
     return GetEnv(flag);
-  } else {
-    return getenv(flag);
-  }
+  //} else {
+  //  return getenv(flag);
+  //}
 }
 
 Flags ubsan_flags;
