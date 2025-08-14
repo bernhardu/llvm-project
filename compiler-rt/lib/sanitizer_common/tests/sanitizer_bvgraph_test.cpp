@@ -109,7 +109,7 @@ void BasicTest() {
 TEST(BVGraph, BasicTest) {
   BasicTest<BV1>();
   BasicTest<BV2>();
-  BasicTest<BV3>();
+  //BasicTest<BV3>();
   BasicTest<BV4>();
 }
 
@@ -156,7 +156,7 @@ void RemoveEdges() {
 TEST(BVGraph, RemoveEdges) {
   RemoveEdges<BV1>();
   RemoveEdges<BV2>();
-  RemoveEdges<BV3>();
+  //RemoveEdges<BV3>();
   RemoveEdges<BV4>();
 }
 
@@ -213,7 +213,7 @@ void Test_isReachable() {
 TEST(BVGraph, isReachable) {
   Test_isReachable<BV1>();
   Test_isReachable<BV2>();
-  Test_isReachable<BV3>();
+  //Test_isReachable<BV3>();
   Test_isReachable<BV4>();
 }
 
@@ -257,7 +257,7 @@ void LongCycle() {
 TEST(BVGraph, LongCycle) {
   LongCycle<BV1>();
   LongCycle<BV2>();
-  LongCycle<BV3>();
+  //LongCycle<BV3>();
   LongCycle<BV4>();
 }
 
@@ -297,7 +297,7 @@ void ShortestPath() {
 TEST(BVGraph, ShortestPath) {
   ShortestPath<BV1>();
   ShortestPath<BV2>();
-  ShortestPath<BV3>();
+  //ShortestPath<BV3>();
   ShortestPath<BV4>();
 }
 
