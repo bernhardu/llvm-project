@@ -18,17 +18,42 @@ int _except_handler4_common(void *a, void *b, void *c, void *d) {
 #endif
 
 int main() {
-  void *ptr = malloc(0);
-  if (ptr)
-    std::cerr << "allocated!\n";
+  size_t heapsize;
+  void *ptr;
+  void *ptr2;
+  void *ptr3;
+
+  ptr = malloc(0);
+  if (!ptr) {
+      std::cerr << "malloc failed\n";
+      return 1;
+  }
+  std::cerr << "allocated!\n";
 
   // Check the 'allocate 1 instead of 0' hack hasn't changed
   // Note that as of b3452d90b043a398639e62b0ab01aa339cc649de, dereferencing
   // the pointer will be detected as a heap-buffer-overflow.
-  if (__sanitizer_get_allocated_size(ptr) != 1)
+  heapsize = __sanitizer_get_allocated_size(ptr);
+  if (heapsize != 1) {
+    std::cerr << "malloc size failure! " << heapsize << " != 1\n";
     return 1;
+  }
 
-  free(ptr);
+  // realloc(ptr, 0) is expected to fail
+  ptr2 = ptr;
+
+  ptr3 = realloc(ptr2, 3);
+  if (!ptr3) {
+      std::cerr << "realloc 3 failed\n";
+      return 1;
+  }
+  heapsize = __sanitizer_get_allocated_size(ptr3);
+  if (heapsize != 3) {
+    std::cerr << "realloc 3 size failure! " << heapsize << " != 1\n";
+    return 1;
+  }
+
+  free(ptr3);
 
   /*
         HeapAlloc hack for our asan interceptor is to change 0
@@ -46,26 +71,40 @@ int main() {
 
     */
   ptr = HeapAlloc(GetProcessHeap(), 0, 0);
-  if (!ptr)
+  if (!ptr) {
+    std::cerr << "HeapAlloc failed\n";
     return 1;
-  void *ptr2 = HeapReAlloc(GetProcessHeap(), 0, ptr, 0);
-  if (!ptr2)
-    return 1;
-  size_t heapsize = HeapSize(GetProcessHeap(), 0, ptr2);
+  }
+  heapsize = HeapSize(GetProcessHeap(), 0, ptr);
   if (heapsize != 1) { // will be 0 without ASAN turned on
     std::cerr << "HeapAlloc size failure! " << heapsize << " != 1\n";
     return 1;
   }
-  void *ptr3 = HeapReAlloc(GetProcessHeap(), 0, ptr2, 3);
-  if (!ptr3)
-    return 1;
-  heapsize = HeapSize(GetProcessHeap(), 0, ptr3);
 
-  if (heapsize != 3) {
-    std::cerr << "HeapAlloc size failure! " << heapsize << " != 3\n";
+  ptr2 = HeapReAlloc(GetProcessHeap(), 0, ptr, 0);
+  if (!ptr2) {
+    std::cerr << "HeapReAlloc 0 failed\n";
     return 1;
   }
+  heapsize = HeapSize(GetProcessHeap(), 0, ptr2);
+  if (heapsize != 1) { // will be 0 without ASAN turned on
+    std::cerr << "HeapReAlloc 0 size failure! " << heapsize << " != 1\n";
+    return 1;
+  }
+
+  ptr3 = HeapReAlloc(GetProcessHeap(), 0, ptr2, 3);
+  if (!ptr3) {
+    std::cerr << "HeapReAlloc 3 failed\n";
+    return 1;
+  }
+  heapsize = HeapSize(GetProcessHeap(), 0, ptr3);
+  if (heapsize != 3) {
+    std::cerr << "HeapAlloc 3 size failure! " << heapsize << " != 3\n";
+    return 1;
+  }
+
   HeapFree(GetProcessHeap(), 0, ptr3);
+  std::cerr << "Okay\n";
   return 0;
 }
 
@@ -73,3 +112,4 @@ int main() {
 // CHECK-NOT: heap-buffer-overflow
 // CHECK-NOT: AddressSanitizer
 // CHECK-NOT: HeapAlloc size failure!
+// CHECK: Okay
