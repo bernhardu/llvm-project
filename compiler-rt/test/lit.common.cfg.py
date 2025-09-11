@@ -974,7 +974,7 @@ def target_page_size():
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
         )
-        out, err = proc.communicate(b'import os; print(os.sysconf("SC_PAGESIZE"))')
+        out, err = proc.communicate(b'import mmap; print(mmap.PAGESIZE)')
         return int(out)
     except:
         return 4096
