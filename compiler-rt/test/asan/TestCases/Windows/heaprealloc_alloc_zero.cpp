@@ -5,6 +5,18 @@
 #include <sanitizer/allocator_interface.h>
 #include <windows.h>
 
+// Ugly workaround against a link error with clang++ at i686
+// Avoids error:
+//     msvcrt.lib(chandler4gs.obj) : error LNK2019: unresolved external symbol __except_handler4_common referenced in function __except_handler4
+#if defined(_WIN32) && defined(__i386__)
+extern "C" int _except_handler4(void *, void *, void *, void *);
+extern "C" {
+int _except_handler4_common(void *a, void *b, void *c, void *d) {
+  return _except_handler4(a, b, c, d);
+}
+}
+#endif
+
 int main() {
   void *ptr = malloc(0);
   if (ptr)
